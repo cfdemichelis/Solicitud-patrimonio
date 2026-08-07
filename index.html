@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitudes Patrimonio</title>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    const SUPABASE_URL = "https://fcevjeyjzqdsityurnbs.supabase.co";
+
+    // PEGAREMOS ACÁ LA CLAVE PUBLICABLE EN EL PRÓXIMO PASO
+    const SUPABASE_KEY = "sb_publishable_K2CCh4-pd3HTli4Pu9GB4g_kgjhc8iQ"
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    window.supabase = supabase;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const area = document.getElementById("area");
+      const contenido = document.getElementById("contenido");
+      const accesoPanel = document.getElementById("accesoPanel");
+
+      area.addEventListener("change", () => {
+        mostrarArea(area.value);
+      });
+
+      accesoPanel.addEventListener("click", () => {
+        mostrarLogin();
+      });
+
+      function mostrarArea(valor) {
+        if (!valor) {
+          contenido.innerHTML = `
+            <div class="vacio">
+              Elegí un área para comenzar.
+            </div>
+          `;
+          return;
+        }
+
+        if (valor === "logistica") {
+          mostrarLogistica();
+          return;
+        }
+
+        contenido.innerHTML = `
+          <div class="card">
+            <h2>${nombreArea(valor)}</h2>
+            <p>Este módulo quedará habilitado en la siguiente etapa.</p>
+          </div>
+        `;
+      }
+
+      function nombreArea(valor) {
+        const nombres = {
+          logistica: "Logística",
+          mantenimiento: "Mantenimiento",
+          automotor: "Automotor",
+          almacen: "Almacén",
+          servicios: "Servicios",
+          limpieza: "Limpieza",
+          personal: "Personal"
+        };
+
+        return nombres[valor] || valor;
+      }
+
+      async function mostrarLogistica() {
+        contenido.innerHTML = `
+          <div class="card">
+            <h2>Logística</h2>
+
+            <label>
+              Tipo de solicitud
+              <select id="tipoLogistica">
+                <option value="pedido_elementos">Pedido de elementos</option>
+                <option value="traslado">Traslado de cosas</option>
+                <option value="otro">Otro</option>
+              </select>
+            </label>
+
+            <div id="formLogistica"></div>
+          </div>
+        `;
+
+        const tipo = document.getElementById("tipoLogistica");
+
+        tipo.addEventListener("change", () => {
+          cargarFormularioLogistica(tipo.value);
+        });
+
+        cargarFormularioLogistica("pedido_elementos");
+      }
+
+      async function cargarFormularioLogistica(tipo) {
+        const contenedor = document.getElementById("formLogistica");
+
+        if (tipo === "pedido_elementos") {
+          const { data: elementos, error } = await supabase
+            .from("elementos_logistica")
+            .select("id,nombre")
+            .order("id");
+
+          if (error) {
+            contenedor.innerHTML =
+              `<div class="error">No se pudieron cargar los elementos.</div>`;
+            return;
+          }
+
+          contenedor.innerHTML = `
+            <form id="pedidoElementos">
+
+              <div class="grid">
+                <label>
+                  Quién pide
+                  <input id="quien" required>
+                </label>
+
+                <label>
+                  Teléfono de contacto
+                  <input id="telefono" required>
+                </label>
+
+                <label>
+                  Mail opcional
+                  <input id="mail" type="email">
+                </label>
+
+                <label>
+                  Lugar
+                  <input id="lugar" required>
+                </label>
+
+                <label>
+                  Día de entrega
+                  <input id="fechaEntrega" type="date" required>
+                </label>
+
+                <label>
+                  Hora de entrega
+                  <input id="horaEntrega" type="time" required>
+                </label>
+
+                <label>
+                  Día de retiro
+                  <input id="fechaRetiro" type="date" required>
+                </label>
+
+                <label>
+                  Hora de retiro
+                  <input id="horaRetiro" type="time" required>
+                </label>
+              </div>
+
+              <h3>Elementos disponibles</h3>
+
+              <div class="elementos">
+                ${elementos.map(e => `
+                  <div class="elemento">
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        class="elementoCheck"
+                        data-nombre="${e.nombre}">
+                      ${e.nombre}
+                    </label>
+
+                    <input
+                      class="cantidad"
+                      type="number"
+                      min="1"
+                      value="1"
+                      disabled>
+                  </div>
+                `).join("")}
+              </div>
+
+              <label>
+                Descripción general (opcional)
+                <textarea id="descripcion"></textarea>
+              </label>
+
+              <button class="principal" type="submit">
+                Enviar solicitud
+              </button>
+
+              <div id="resultado"></div>
+            </form>
+          `;
+
+          document.querySelectorAll(".elementoCheck")
+            .forEach(check => {
+              check.addEventListener("change", () => {
+                const cantidad =
+                  check.closest(".elemento")
+                    .querySelector(".cantidad");
+
+                cantidad.disabled = !check.checked;
+              });
+            });
+
+          document
+            .getElementById("pedidoElementos")
+            .addEventListener("submit", enviarElementos);
+        }
+
+        if (tipo === "traslado") {
+          contenedor.innerHTML = `
+            <form id="pedidoTraslado">
+
+              <div class="grid">
+
+                <label>
+                  Quién pide
+                  <input id="quien" required>
+                </label>
+
+                <label>
+                  Teléfono de contacto
+                  <input id="telefono" required>
+                </label>
+
+                <label>
+                  Día de retiro
+                  <input id="fechaRetiroTraslado" type="date" required>
+                </label>
+
+                <label>
+                  Hora de retiro
+                  <input id="horaRetiroTraslado" type="time" required>
+                </label>
+
+                <label class="ancho">
+                  Lugar de retiro
+                  <input id="lugarRetiro" required>
+                </label>
+
+                <label>
+                  Día de entrega
+                  <input id="fechaEntregaTraslado" type="date" required>
+                </label>
+
+                <label>
+                  Hora de entrega
+                  <input id="horaEntregaTraslado" type="time" required>
+                </label>
+
+                <label class="ancho">
+                  Lugar de entrega
+                  <input id="lugarEntrega" required>
+                </label>
+
+              </div>
+
+              <label>
+                Descripción del pedido
+                <textarea id="descripcionTraslado" required></textarea>
+              </label>
+
+              <button class="principal" type="submit">
+                Enviar solicitud
+              </button>
+
+              <div id="resultado"></div>
+            </form>
+          `;
+
+          document
+            .getElementById("pedidoTraslado")
+            .addEventListener("submit", enviarTraslado);
+        }
+
+        if (tipo === "otro") {
+          contenedor.innerHTML = `
+            <form id="pedidoOtro">
+
+              <label>
+                Quién pide
+                <input id="quien" required>
+              </label>
+
+              <label>
+                Teléfono
+                <input id="telefono" required>
+              </label>
+
+              <label>
+                Descripción
+                <textarea id="descripcionOtro" required></textarea>
+              </label>
+
+              <button class="principal">
+                Enviar solicitud
+              </button>
+
+              <div id="resultado"></div>
+            </form>
+          `;
+
+          document
+            .getElementById("pedidoOtro")
+            .addEventListener("submit", enviarOtro);
+        }
+      }
+
+      async function enviarElementos(event) {
+        event.preventDefault();
+
+        const elementos = [];
+
+        document.querySelectorAll(".elementoCheck:checked")
+          .forEach(check => {
+            const cantidad =
+              check.closest(".elemento")
+                .querySelector(".cantidad").value;
+
+            elementos.push({
+              nombre: check.dataset.nombre,
+              cantidad: Number(cantidad)
+            });
+          });
+
+        if (!elementos.length) {
+          mostrarResultado(
+            "Seleccioná por lo menos un elemento.",
+            true
+          );
+          return;
+        }
+
+        const registro = {
+          codigo: "TEMP",
+          modulo: "logistica",
+          tipo: "pedido_elementos",
+          solicitante: valor("quien"),
+          lugar: valor("lugar"),
+          telefono: valor("telefono"),
+          email: valor("mail") || null,
+          fecha_requerida: valor("fechaEntrega"),
+          descripcion: valor("descripcion") || null,
+          estado: "nueva",
+          prioridad: null,
+          datos: {
+            elementos,
+            fecha_entrega: valor("fechaEntrega"),
+            hora_entrega: valor("horaEntrega"),
+            fecha_retiro: valor("fechaRetiro"),
+            hora_retiro: valor("horaRetiro")
+          }
+        };
+
+        await guardarSolicitud(registro);
+      }
+
+      async function enviarTraslado(event) {
+        event.preventDefault();
+
+        const registro = {
+          codigo: "TEMP",
+          modulo: "logistica",
+          tipo: "traslado",
+          solicitante: valor("quien"),
+          lugar: valor("lugarEntrega"),
+          telefono: valor("telefono"),
+          fecha_requerida: valor("fechaEntregaTraslado"),
+          descripcion: valor("descripcionTraslado"),
+          estado: "nueva",
+          prioridad: null,
+          datos: {
+            retiro: {
+              fecha: valor("fechaRetiroTraslado"),
+              hora: valor("horaRetiroTraslado"),
+              lugar: valor("lugarRetiro")
+            },
+            entrega: {
+              fecha: valor("fechaEntregaTraslado"),
+              hora: valor("horaEntregaTraslado"),
+              lugar: valor("lugarEntrega")
+            }
+          }
+        };
+
+        await guardarSolicitud(registro);
+      }
+
+      async function enviarOtro(event) {
+        event.preventDefault();
+
+        const registro = {
+          codigo: "TEMP",
+          modulo: "logistica",
+          tipo: "otro",
+          solicitante: valor("quien"),
+          telefono: valor("telefono"),
+          descripcion: valor("descripcionOtro"),
+          estado: "nueva",
+          prioridad: null,
+          datos: {}
+        };
+
+        await guardarSolicitud(registro);
+      }
+
+      async function guardarSolicitud(registro) {
+        const { data, error } = await supabase
+          .from("solicitudes")
+          .insert(registro)
+          .select("codigo")
+          .single();
+
+        if (error) {
+          mostrarResultado(
+            "No se pudo enviar la solicitud: " + error.message,
+            true
+          );
+          return;
+        }
+
+        mostrarResultado(
+          "Solicitud enviada correctamente. Número: " +
+          data.codigo,
+          false
+        );
+      }
+
+      function mostrarResultado(texto, error) {
+        const resultado =
+          document.getElementById("resultado");
+
+        resultado.className =
+          error ? "error" : "exito";
+
+        resultado.textContent = texto;
+      }
+
+      function valor(id) {
+        return document.getElementById(id)?.value || "";
+      }
+
+      function mostrarLogin() {
+        contenido.innerHTML = `
+          <div class="card login">
+
+            <h2>Panel interno</h2>
+
+            <p>
+              Acceso para el equipo de Patrimonio.
+            </p>
+
+            <form id="login">
+
+              <label>
+                Usuario
+                <input id="usuario" required>
+              </label>
+
+              <label>
+                Contraseña
+                <input
+                  id="password"
+                  type="password"
+                  required>
+              </label>
+
+              <button class="principal">
+                Ingresar
+              </button>
+
+              <div id="resultadoLogin"></div>
+
+            </form>
+          </div>
+        `;
+
+        document
+          .getElementById("login")
+          .addEventListener("submit", login);
+      }
+
+      async function login(event) {
+        event.preventDefault();
+
+        const usuario =
+          valor("usuario")
+            .trim()
+            .toLowerCase();
+
+        const password =
+          valor("password");
+
+        const email =
+          usuario + "@patrimonio.local";
+
+        const { error } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+
+        if (error) {
+          document.getElementById("resultadoLogin")
+            .innerHTML =
+            `<div class="error">
+              Usuario o contraseña incorrectos.
+            </div>`;
+          return;
+        }
+
+        mostrarPanel();
+      }
+
+      async function mostrarPanel() {
+        const { data: usuarioId } =
+          await supabase.rpc("mi_usuario_id");
+
+        const { data: perfil } =
+          await supabase
+            .from("usuarios")
+            .select("nombre,rol")
+            .eq("id", usuarioId)
+            .single();
+
+        const { data: solicitudes } =
+          await supabase
+            .from("solicitudes")
+            .select("*")
+            .order("creado_en", {
+              ascending: false
+            });
+
+        contenido.innerHTML = `
+          <div class="card">
+
+            <div class="panelCabecera">
+
+              <div>
+                <h2>
+                  Hola, ${perfil?.nombre || ""}
+                </h2>
+
+                <p>
+                  Rol:
+                  ${perfil?.rol || ""}
+                </p>
+              </div>
+
+              <button id="cerrarSesion">
+                Cerrar sesión
+              </button>
+
+            </div>
+
+            <h3>Solicitudes</h3>
+
+            <div class="solicitudes">
+
+              ${
+                solicitudes?.length
+                ?
+                solicitudes
+                  .map(s => `
+                    <div class="solicitud">
+
+                      <strong>
+                        ${s.codigo}
+                      </strong>
+
+                      <span>
+                        ${nombreArea(s.modulo)}
+                      </span>
+
+                      <span>
+                        ${s.tipo}
+                      </span>
+
+                      <span>
+                        Solicita:
+                        ${s.solicitante}
+                      </span>
+
+                      ${
+                        s.lugar
+                        ?
+                        `<span>
+                          Lugar:
+                          ${s.lugar}
+                        </span>`
+                        :
+                        ""
+                      }
+
+                      <label>
+                        Estado
+
+                        <select
+                          class="estadoSolicitud"
+                          data-id="${s.id}">
+
+                          ${opcionesEstado(s.estado)}
+
+                        </select>
+
+                      </label>
+
+                    </div>
+                  `)
+                  .join("")
+                :
+                "<p>No hay solicitudes.</p>"
+              }
+
+            </div>
+
+          </div>
+        `;
+
+        document
+          .getElementById("cerrarSesion")
+          .addEventListener("click", async () => {
+            await supabase.auth.signOut();
+            mostrarArea("");
+          });
+
+        document
+          .querySelectorAll(".estadoSolicitud")
+          .forEach(select => {
+            select.addEventListener("change", async () => {
+
+              await supabase
+                .from("solicitudes")
+                .update({
+                  estado: select.value,
+                  actualizado_en:
+                    new Date().toISOString()
+                })
+                .eq("id", select.dataset.id);
+
+            });
+          });
+      }
+
+      function opcionesEstado(actual) {
+        const estados = {
+          nueva: "Nueva",
+          revisada: "Revisada",
+          asignada: "Asignada",
+          en_ejecucion: "En ejecución",
+          en_espera: "En espera",
+          finalizada: "Finalizada",
+          cancelada: "Cancelada"
+        };
+
+        return Object.entries(estados)
+          .map(([valor, nombre]) => `
+            <option
+              value="${valor}"
+              ${actual === valor ? "selected" : ""}>
+              ${nombre}
+            </option>
+          `)
+          .join("");
+      }
+    });
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+      background: #f5f7fa;
+      color: #172033;
+    }
+
+    header {
+      background: #102033;
+      color: white;
+      padding: 22px;
+    }
+
+    .encabezado {
+      max-width: 950px;
+      margin: auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    header h1 {
+      margin: 4px 0 0;
+    }
+
+    header small {
+      opacity: .7;
+    }
+
+    main {
+      max-width: 950px;
+      margin: auto;
+      padding: 22px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #dde4ec;
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 18px;
+    }
+
+    .selector {
+      width: 100%;
+      font-size: 18px;
+    }
+
+    select,
+    input,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    select,
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #c9d2dc;
+      border-radius: 9px;
+      padding: 11px;
+      background: white;
+    }
+
+    textarea {
+      min-height: 100px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    form {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns:
+        repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .ancho {
+      grid-column: 1 / -1;
+    }
+
+    .elementos {
+      display: grid;
+      grid-template-columns:
+        repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .elemento {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #dde4ec;
+      border-radius: 9px;
+      padding: 9px;
+    }
+
+    .check {
+      flex-direction: row;
+      align-items: center;
+      flex: 1;
+      font-weight: normal;
+    }
+
+    .check input {
+      width: auto;
+    }
+
+    .cantidad {
+      width: 75px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 11px 16px;
+      cursor: pointer;
+    }
+
+    .principal {
+      background: #102033;
+      color: white;
+      font-weight: bold;
+    }
+
+    #accesoPanel {
+      background: rgba(255,255,255,.12);
+      color: white;
+    }
+
+    .vacio {
+      text-align: center;
+      padding: 50px;
+      color: #6a7380;
+    }
+
+    .exito {
+      background: #e7f7ee;
+      color: #17663a;
+      padding: 12px;
+      border-radius: 9px;
+    }
+
+    .error {
+      background: #fdecec;
+      color: #9f2525;
+      padding: 12px;
+      border-radius: 9px;
+    }
+
+    .panelCabecera {
+      display: flex;
+      justify-content:
+        space-between;
+      align-items: center;
+    }
+
+    .solicitudes {
+      display: grid;
+      gap: 10px;
+    }
+
+    .solicitud {
+      border: 1px solid #dde4ec;
+      border-radius: 10px;
+      padding: 14px;
+      display: grid;
+      gap: 6px;
+    }
+
+    @media (max-width: 700px) {
+      .grid,
+      .elementos {
+        grid-template-columns: 1fr;
+      }
+
+      .encabezado {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+
+    <div class="encabezado">
+
+      <div>
+        <small>
+          Dirección de Patrimonio
+        </small>
+
+        <h1>
+          Solicitudes
+        </h1>
+      </div>
+
+      <button id="accesoPanel">
+        Panel interno
+      </button>
+
+    </div>
+
+  </header>
+
+  <main>
+
+    <div class="card">
+
+      <h2>
+        ¿Qué necesitás solicitar?
+      </h2>
+
+      <p>
+        Elegí primero el área.
+        No necesitás usuario ni contraseña.
+      </p>
+
+      <select
+        id="area"
+        class="selector">
+
+        <option value="">
+          Seleccionar área…
+        </option>
+
+        <option value="logistica">
+          Logística
+        </option>
+
+        <option value="mantenimiento">
+          Mantenimiento
+        </option>
+
+        <option value="automotor">
+          Automotor
+        </option>
+
+        <option value="almacen">
+          Almacén
+        </option>
+
+        <option value="servicios">
+          Servicios
+        </option>
+
+        <option value="limpieza">
+          Limpieza
+        </option>
+
+        <option value="personal">
+          Personal
+        </option>
+
+      </select>
+
+    </div>
+
+    <div id="contenido">
+
+      <div class="vacio">
+        Elegí un área para comenzar.
+      </div>
+
+    </div>
+
+  </main>
+
+</body>
+</html>
