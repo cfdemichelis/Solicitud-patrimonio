@@ -404,11 +404,9 @@
       }
 
       async function guardarSolicitud(registro) {
-        const { data, error } = await supabase
-          .from("solicitudes")
-          .insert(registro)
-          .select("codigo")
-          .single();
+     const { error } = await supabase
+  .from("solicitudes")
+  .insert(registro);
 
         if (error) {
           mostrarResultado(
@@ -418,11 +416,10 @@
           return;
         }
 
-        mostrarResultado(
-          "Solicitud enviada correctamente. Número: " +
-          data.codigo,
-          false
-        );
+       mostrarResultado(
+  "Solicitud enviada correctamente.",
+  false
+);
       }
 
       function mostrarResultado(texto, error) {
