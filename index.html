@@ -508,137 +508,450 @@
         mostrarPanel();
       }
 
-      async function mostrarPanel() {
-        const { data: usuarioId } =
-          await supabase.rpc("mi_usuario_id");
+    async function mostrarPanel() {
 
-        const { data: perfil } =
-          await supabase
-            .from("usuarios")
-            .select("nombre,rol")
-            .eq("id", usuarioId)
-            .single();
+  const { data: usuarioId } =
+    await supabase.rpc("mi_usuario_id");
 
-        const { data: solicitudes } =
-          await supabase
-            .from("solicitudes")
-            .select("*")
-            .order("creado_en", {
-              ascending: false
-            });
+  const { data: perfil } =
+    await supabase
+      .from("usuarios")
+      .select("nombre,rol")
+      .eq("id", usuarioId)
+      .single();
 
-        contenido.innerHTML = `
-          <div class="card">
+  const { data: solicitudes } =
+    await supabase
+      .from("solicitudes")
+      .select("*")
+      .order("creado_en", {
+        ascending: false
+      });
 
-            <div class="panelCabecera">
+  const { data: usuariosPanel } =
+    await supabase.rpc("listar_usuarios_panel");
 
-              <div>
-                <h2>
-                  Hola, ${perfil?.nombre || ""}
-                </h2>
+  const { data: responsablesPanel } =
+    await supabase.rpc("listar_responsables_panel");
 
-                <p>
-                  Rol:
-                  ${perfil?.rol || ""}
-                </p>
-              </div>
+  const esAdmin = perfil?.rol === "admin";
 
-              <button id="cerrarSesion">
-                Cerrar sesión
-              </button>
+  function responsablesDe(solicitudId) {
+    return (responsablesPanel || [])
+      .filter(r => r.solicitud_id === solicitudId);
+  }
 
-            </div>
+  function prioridadOpciones(actual) {
+    const prioridades = {
+      baja: "Baja",
+      normal: "Normal",
+      alta: "Alta",
+      urgente: "Urgente"
+    };
 
-            <h3>Solicitudes</h3>
+    return `
+      <option value="" ${!actual ? "selected" : ""}>
+        Sin definir
+      </option>
+      ${
+        Object.entries(prioridades)
+          .map(([valor, nombre]) => `
+            <option
+              value="${valor}"
+              ${actual === valor ? "selected" : ""}>
+              ${nombre}
+            </option>
+          `)
+          .join("")
+      }
+    `;
+  }
 
-            <div class="solicitudes">
+  function detalleSolicitud(s) {
 
-              ${
-                solicitudes?.length
-                ?
-                solicitudes
-                  .map(s => `
-                    <div class="solicitud">
+    let detalleDatos = "";
 
-                      <strong>
-                        ${s.codigo}
-                      </strong>
+    if (s.datos &&
+        Object.keys(s.datos).length) {
 
-                      <span>
-                        ${nombreArea(s.modulo)}
-                      </span>
+      detalleDatos = `
+        <details>
+          <summary>
+            Ver detalle completo
+          </summary>
 
-                      <span>
-                        ${s.tipo}
-                      </span>
+          <pre style="
+            white-space:pre-wrap;
+            background:#f5f7fa;
+            padding:10px;
+            border-radius:8px;
+            margin-top:8px;
+          ">${JSON.stringify(s.datos, null, 2)}</pre>
+        </details>
+      `;
+    }
 
-                      <span>
-                        Solicita:
-                        ${s.solicitante}
-                      </span>
-
-                      ${
-                        s.lugar
-                        ?
-                        `<span>
-                          Lugar:
-                          ${s.lugar}
-                        </span>`
-                        :
-                        ""
-                      }
-
-                      <label>
-                        Estado
-
-                        <select
-                          class="estadoSolicitud"
-                          data-id="${s.id}">
-
-                          ${opcionesEstado(s.estado)}
-
-                        </select>
-
-                      </label>
-
-                    </div>
-                  `)
-                  .join("")
-                :
-                "<p>No hay solicitudes.</p>"
-              }
-
-            </div>
-
-          </div>
-        `;
-
-        document
-          .getElementById("cerrarSesion")
-          .addEventListener("click", async () => {
-            await supabase.auth.signOut();
-            mostrarArea("");
-          });
-
-        document
-          .querySelectorAll(".estadoSolicitud")
-          .forEach(select => {
-            select.addEventListener("change", async () => {
-
-              await supabase
-                .from("solicitudes")
-                .update({
-                  estado: select.value,
-                  actualizado_en:
-                    new Date().toISOString()
-                })
-                .eq("id", select.dataset.id);
-
-            });
-          });
+    return `
+      ${s.telefono
+        ? `<span>Teléfono: ${s.telefono}</span>`
+        : ""
       }
 
-      function opcionesEstado(actual) {
+      ${s.email
+        ? `<span>Mail: ${s.email}</span>`
+        : ""
+      }
+
+      ${s.fecha_requerida
+        ? `<span>Fecha requerida: ${s.fecha_requerida}</span>`
+        : ""
+      }
+
+      ${s.descripcion
+        ? `<span>Descripción: ${s.descripcion}</span>`
+        : ""
+      }
+
+      ${detalleDatos}
+    `;
+  }
+
+  contenido.innerHTML = `
+    <div class="card">
+
+      <div class="panelCabecera">
+
+        <div>
+          <h2>
+            Hola, ${perfil?.nombre || ""}
+          </h2>
+
+          <p>
+            Rol: ${perfil?.rol || ""}
+          </p>
+        </div>
+
+        <button id="cerrarSesion">
+          Cerrar sesión
+        </button>
+
+      </div>
+
+      <h3>Solicitudes</h3>
+
+      <div class="solicitudes">
+
+        ${
+          solicitudes?.length
+          ?
+          solicitudes
+            .map(s => {
+
+              const responsables =
+                responsablesDe(s.id);
+
+              return `
+                <div class="solicitud">
+
+                  <strong>
+                    ${s.codigo}
+                  </strong>
+
+                  <span>
+                    ${nombreArea(s.modulo)}
+                    ·
+                    ${s.tipo}
+                  </span>
+
+                  <span>
+                    Solicita: ${s.solicitante}
+                  </span>
+
+                  ${
+                    s.lugar
+                    ? `<span>Lugar: ${s.lugar}</span>`
+                    : ""
+                  }
+
+                  ${detalleSolicitud(s)}
+
+                  <label>
+                    Estado
+
+                    <select
+                      class="estadoSolicitud"
+                      data-id="${s.id}">
+
+                      ${opcionesEstado(s.estado)}
+
+                    </select>
+                  </label>
+
+                  <label>
+                    Prioridad
+
+                    <select
+                      class="prioridadSolicitud"
+                      data-id="${s.id}">
+
+                      ${prioridadOpciones(s.prioridad)}
+
+                    </select>
+                  </label>
+
+                  <div
+                    style="
+                      border-top:1px solid #dde4ec;
+                      padding-top:10px;
+                      margin-top:6px;
+                    ">
+
+                    <strong>
+                      Responsables
+                    </strong>
+
+                    ${
+                      esAdmin
+                      ?
+                      `
+                        <div
+                          class="responsablesLista"
+                          data-solicitud="${s.id}"
+                          style="
+                            display:grid;
+                            grid-template-columns:
+                              repeat(2,minmax(0,1fr));
+                            gap:6px;
+                            margin-top:8px;
+                          ">
+
+                          ${
+                            (usuariosPanel || [])
+                              .map(u => {
+
+                                const marcado =
+                                  responsables.some(
+                                    r =>
+                                      r.usuario_id === u.id
+                                  );
+
+                                return `
+                                  <label
+                                    style="
+                                      display:flex;
+                                      flex-direction:row;
+                                      align-items:center;
+                                      gap:6px;
+                                      font-weight:normal;
+                                    ">
+
+                                    <input
+                                      type="checkbox"
+                                      class="responsableCheck"
+                                      value="${u.id}"
+                                      ${marcado
+                                        ? "checked"
+                                        : ""
+                                      }
+                                      style="width:auto;">
+
+                                    ${u.nombre}
+
+                                  </label>
+                                `;
+                              })
+                              .join("")
+                          }
+
+                        </div>
+
+                        <button
+                          type="button"
+                          class="guardarResponsables"
+                          data-id="${s.id}"
+                          style="margin-top:10px;">
+
+                          Guardar responsables
+
+                        </button>
+                      `
+                      :
+                      `
+                        <div style="margin-top:8px;">
+                          ${
+                            responsables.length
+                            ?
+                            responsables
+                              .map(r => r.nombre)
+                              .join(", ")
+                            :
+                            "Sin responsable asignado"
+                          }
+                        </div>
+                      `
+                    }
+
+                  </div>
+
+                </div>
+              `;
+            })
+            .join("")
+          :
+          "<p>No hay solicitudes.</p>"
+        }
+
+      </div>
+
+    </div>
+  `;
+
+
+  document
+    .getElementById("cerrarSesion")
+    .addEventListener("click", async () => {
+
+      await supabase.auth.signOut();
+
+      mostrarArea("");
+
+    });
+
+
+  document
+    .querySelectorAll(".estadoSolicitud")
+    .forEach(select => {
+
+      select.addEventListener(
+        "change",
+        async () => {
+
+          const { error } =
+            await supabase
+              .from("solicitudes")
+              .update({
+                estado: select.value,
+                actualizado_en:
+                  new Date().toISOString()
+              })
+              .eq("id", select.dataset.id);
+
+          if (error) {
+            alert(
+              "No se pudo cambiar el estado: " +
+              error.message
+            );
+          }
+
+        }
+      );
+
+    });
+
+
+  document
+    .querySelectorAll(".prioridadSolicitud")
+    .forEach(select => {
+
+      select.addEventListener(
+        "change",
+        async () => {
+
+          const { error } =
+            await supabase
+              .from("solicitudes")
+              .update({
+                prioridad:
+                  select.value || null,
+                actualizado_en:
+                  new Date().toISOString()
+              })
+              .eq("id", select.dataset.id);
+
+          if (error) {
+            alert(
+              "No se pudo cambiar la prioridad: " +
+              error.message
+            );
+          }
+
+        }
+      );
+
+    });
+
+
+  if (esAdmin) {
+
+    document
+      .querySelectorAll(".guardarResponsables")
+      .forEach(boton => {
+
+        boton.addEventListener(
+          "click",
+          async () => {
+
+            const solicitudId =
+              boton.dataset.id;
+
+            const contenedorResponsables =
+              document.querySelector(
+                `.responsablesLista[data-solicitud="${solicitudId}"]`
+              );
+
+            const seleccionados =
+              Array.from(
+                contenedorResponsables
+                  .querySelectorAll(
+                    ".responsableCheck:checked"
+                  )
+              )
+              .map(check => check.value);
+
+            boton.disabled = true;
+            boton.textContent = "Guardando...";
+
+            const { error } =
+              await supabase.rpc(
+                "asignar_responsables",
+                {
+                  p_solicitud_id:
+                    solicitudId,
+
+                  p_usuario_ids:
+                    seleccionados
+                }
+              );
+
+            if (error) {
+
+              alert(
+                "No se pudo realizar la asignación: " +
+                error.message
+              );
+
+              boton.disabled = false;
+              boton.textContent =
+                "Guardar responsables";
+
+              return;
+            }
+
+            boton.textContent = "Guardado ✓";
+
+            setTimeout(
+              () => mostrarPanel(),
+              700
+            );
+
+          }
+        );
+
+      });
+
+  }
+
+}
         const estados = {
           nueva: "Nueva",
           revisada: "Revisada",
