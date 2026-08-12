@@ -1,6 +1,18 @@
 (()=>{
   const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 
+  function esSelectorLogistica(sel){
+    const txt=[...sel.options].map(o=>norm(o.textContent));
+    return txt.some(t=>t.includes('pedido de elementos')) && txt.some(t=>t.includes('traslado de cosas'));
+  }
+
+  function opcionMovilidad(sel){
+    return [...sel.options].find(o=>{
+      const t=norm(o.textContent);
+      return t.includes('traslado de elementos de logistica') || t.includes('movilidad de personal');
+    });
+  }
+
   function setLabel(id,text){
     const el=document.getElementById(id); if(!el) return;
     const lab=el.closest('label'); if(!lab) return;
@@ -8,28 +20,19 @@
     if(node) node.textContent=text;
   }
 
-  function esSelectorLogistica(sel){
-    const txt=[...sel.options].map(o=>norm(o.textContent));
-    return txt.some(t=>t.includes('pedido de elementos')) && txt.some(t=>t.includes('traslado de cosas'));
+  function marcarSelector(sel){
+    if(!esSelectorLogistica(sel)) return false;
+    if(sel.dataset.movilidadReady==='1') return true;
+    const opt=opcionMovilidad(sel); if(!opt) return false;
+    opt.textContent='Movilidad de personal';
+    sel.dataset.movilidadReady='1';
+    sel.addEventListener('change',()=>setTimeout(()=>prepararFormulario(sel),30));
+    return true;
   }
 
-  function prepararSelector(){
-    document.querySelectorAll('select').forEach(sel=>{
-      if(!esSelectorLogistica(sel)) return;
-      const opt=[...sel.options].find(o=>{
-        const t=norm(o.textContent);
-        return t.includes('traslado de elementos de logistica') || t.includes('movilidad de personal');
-      });
-      if(!opt) return;
-      opt.value='movilidad_personal';
-      opt.textContent='Movilidad de personal';
-      sel.dataset.logisticaTipo='1';
-    });
-  }
-
-  function prepararFormulario(){
-    const tipo=[...document.querySelectorAll('select[data-logistica-tipo="1"]')].find(s=>s.value==='movilidad_personal');
-    if(!tipo) return;
+  function prepararFormulario(sel){
+    const actual=sel.options[sel.selectedIndex];
+    if(!actual||norm(actual.textContent)!=='movilidad de personal') return;
     const form=(document.querySelector('#lr')||document.querySelector('#lugarRetiro'))?.closest('form');
     if(!form||form.dataset.movilidadPreparada==='1') return;
     form.dataset.movilidadPreparada='1';
@@ -45,32 +48,33 @@
     setLabel('desc','Detalle del traslado / observaciones');
 
     const desc=document.getElementById('desc');
-    const bloque=document.createElement('div');
-    bloque.className='full movilidad-personal-box';
-    bloque.innerHTML=`
-      <h3 style="margin:0 0 8px">Personal a trasladar</h3>
-      <div class="grid">
-        <label>Tipo de personal
-          <select id="tipoPersonalMovilidad" required>
-            <option value="propio">Personal propio</option>
-            <option value="otra_area">Personal de otra área</option>
-            <option value="mixto">Personal mixto</option>
-          </select>
-        </label>
-        <label>Cantidad de personas
-          <input id="cantidadPersonasMovilidad" type="number" min="1" required>
-        </label>
-        <label>Área / dependencia del personal
-          <input id="areaPersonalMovilidad" type="text" required>
-        </label>
-        <label>Responsable o referencia del grupo (opcional)
-          <input id="referenciaPersonalMovilidad" type="text">
-        </label>
-      </div>
-    `;
-    const descLabel=desc?.closest('label');
-    if(descLabel) descLabel.parentNode.insertBefore(bloque,descLabel);
-    else form.appendChild(bloque);
+    if(!document.getElementById('movilidadPersonalExtra')){
+      const bloque=document.createElement('div');
+      bloque.id='movilidadPersonalExtra';
+      bloque.className='full movilidad-personal-box';
+      bloque.innerHTML=`
+        <h3 style="margin:0 0 8px">Personal a trasladar</h3>
+        <div class="grid">
+          <label>Tipo de personal
+            <select id="tipoPersonalMovilidad" required>
+              <option value="propio">Personal propio</option>
+              <option value="otra_area">Personal de otra área</option>
+              <option value="mixto">Personal mixto</option>
+            </select>
+          </label>
+          <label>Cantidad de personas
+            <input id="cantidadPersonasMovilidad" type="number" min="1" required>
+          </label>
+          <label>Área / dependencia del personal
+            <input id="areaPersonalMovilidad" type="text" required>
+          </label>
+          <label>Responsable o referencia del grupo (opcional)
+            <input id="referenciaPersonalMovilidad" type="text">
+          </label>
+        </div>`;
+      const descLabel=desc?.closest('label');
+      if(descLabel) descLabel.parentNode.insertBefore(bloque,descLabel); else form.appendChild(bloque);
+    }
 
     form.addEventListener('submit',()=>{
       const t=document.getElementById('tipoPersonalMovilidad');
@@ -78,7 +82,7 @@
       const a=document.getElementById('areaPersonalMovilidad');
       const r=document.getElementById('referenciaPersonalMovilidad');
       if(!desc||!t||!c||!a) return;
-      let detalle=desc.value;
+      let detalle=desc.value||'';
       if(desc.dataset.movilidadEstructurada==='1'){
         const ix=detalle.indexOf('\n\nDetalle: ');
         if(ix>=0) detalle=detalle.slice(ix+11);
@@ -89,10 +93,15 @@
     },true);
   }
 
-  function revisar(){prepararSelector();prepararFormulario();}
-  const ob=new MutationObserver(()=>setTimeout(revisar,0));
-  ob.observe(document.documentElement,{childList:true,subtree:true});
-  document.addEventListener('change',e=>{if(e.target.matches('select[data-logistica-tipo="1"]'))setTimeout(revisar,0)});
-  setInterval(revisar,500);
-  revisar();
+  function buscar(){
+    document.querySelectorAll('select').forEach(sel=>{
+      if(marcarSelector(sel)) prepararFormulario(sel);
+    });
+  }
+
+  // Búsquedas puntuales: no hay observadores ni intervalos que puedan bloquear el select nativo.
+  setTimeout(buscar,100);
+  setTimeout(buscar,500);
+  setTimeout(buscar,1200);
+  document.addEventListener('click',()=>setTimeout(buscar,80),true);
 })();
