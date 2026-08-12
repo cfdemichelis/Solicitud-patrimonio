@@ -1,4 +1,6 @@
 (()=>{
+  const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+
   function setLabel(id,text){
     const el=document.getElementById(id); if(!el) return;
     const lab=el.closest('label'); if(!lab) return;
@@ -6,12 +8,19 @@
     if(node) node.textContent=text;
   }
 
+  function esSelectorLogistica(sel){
+    const txt=[...sel.options].map(o=>norm(o.textContent));
+    return txt.some(t=>t.includes('pedido de elementos')) && txt.some(t=>t.includes('traslado de cosas'));
+  }
+
   function prepararSelector(){
     document.querySelectorAll('select').forEach(sel=>{
-      const opt=[...sel.options].find(o=>o.value==='traslado_logistica'||o.value==='movilidad_personal');
-      const tienePedido=[...sel.options].some(o=>o.value==='pedido_elementos');
-      const tieneTraslado=[...sel.options].some(o=>o.value==='traslado');
-      if(!opt||!tienePedido||!tieneTraslado) return;
+      if(!esSelectorLogistica(sel)) return;
+      const opt=[...sel.options].find(o=>{
+        const t=norm(o.textContent);
+        return t.includes('traslado de elementos de logistica') || t.includes('movilidad de personal');
+      });
+      if(!opt) return;
       opt.value='movilidad_personal';
       opt.textContent='Movilidad de personal';
       sel.dataset.logisticaTipo='1';
@@ -21,7 +30,7 @@
   function prepararFormulario(){
     const tipo=[...document.querySelectorAll('select[data-logistica-tipo="1"]')].find(s=>s.value==='movilidad_personal');
     if(!tipo) return;
-    const form=document.querySelector('#lr')?.closest('form');
+    const form=(document.querySelector('#lr')||document.querySelector('#lugarRetiro'))?.closest('form');
     if(!form||form.dataset.movilidadPreparada==='1') return;
     form.dataset.movilidadPreparada='1';
 
@@ -61,6 +70,7 @@
     `;
     const descLabel=desc?.closest('label');
     if(descLabel) descLabel.parentNode.insertBefore(bloque,descLabel);
+    else form.appendChild(bloque);
 
     form.addEventListener('submit',()=>{
       const t=document.getElementById('tipoPersonalMovilidad');
@@ -83,6 +93,6 @@
   const ob=new MutationObserver(()=>setTimeout(revisar,0));
   ob.observe(document.documentElement,{childList:true,subtree:true});
   document.addEventListener('change',e=>{if(e.target.matches('select[data-logistica-tipo="1"]'))setTimeout(revisar,0)});
-  setInterval(revisar,800);
+  setInterval(revisar,500);
   revisar();
 })();
