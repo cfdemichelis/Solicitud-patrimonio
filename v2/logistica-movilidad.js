@@ -20,16 +20,6 @@
     if(node) node.textContent=text;
   }
 
-  function marcarSelector(sel){
-    if(!esSelectorLogistica(sel)) return false;
-    if(sel.dataset.movilidadReady==='1') return true;
-    const opt=opcionMovilidad(sel); if(!opt) return false;
-    opt.textContent='Movilidad de personal';
-    sel.dataset.movilidadReady='1';
-    sel.addEventListener('change',()=>setTimeout(()=>prepararFormulario(sel),30));
-    return true;
-  }
-
   function prepararFormulario(sel){
     const actual=sel.options[sel.selectedIndex];
     if(!actual||norm(actual.textContent)!=='movilidad de personal') return;
@@ -93,15 +83,22 @@
     },true);
   }
 
-  function buscar(){
-    document.querySelectorAll('select').forEach(sel=>{
-      if(marcarSelector(sel)) prepararFormulario(sel);
-    });
+  function detectar(){
+    for(const sel of document.querySelectorAll('select')){
+      if(!esSelectorLogistica(sel)) continue;
+      const opt=opcionMovilidad(sel); if(!opt) continue;
+      opt.textContent='Movilidad de personal';
+      sel.addEventListener('change',()=>setTimeout(()=>prepararFormulario(sel),0),{once:false});
+      return true;
+    }
+    return false;
   }
 
-  // Búsquedas puntuales: no hay observadores ni intervalos que puedan bloquear el select nativo.
-  setTimeout(buscar,100);
-  setTimeout(buscar,500);
-  setTimeout(buscar,1200);
-  document.addEventListener('click',()=>setTimeout(buscar,80),true);
+  // Observa sólo hasta que el selector de Logística exista; después se desconecta.
+  if(!detectar()){
+    const obs=new MutationObserver(()=>{
+      if(detectar()) obs.disconnect();
+    });
+    obs.observe(document.documentElement,{childList:true,subtree:true});
+  }
 })();
