@@ -1,6 +1,15 @@
 (()=>{
   const datos={};
-  const items=['Gazebos','Sillas','Mesas','Tablón','Tablones','Caballetes','Pava eléctrica','Alargue','Zapatilla eléctrica','Bidones de agua','Dispenser','Té','Mate cocido','Café','Azúcar','Removedores','Removedor','Edulcorante','Vasos térmicos','Vasos telgopor','Vasos plásticos','Precintos','Alambre','Herramientas','Moledora','Agujereadora','Hidrolavadora','Aspiradora'];
+  const items=[
+    ['Gazebos',['Gazebos','Gacebos']],['Sillas',['Sillas']],['Mesas',['Mesas']],['Manteles',['Manteles','Mantel']],
+    ['Tablones',['Tablones','Tablón']],['Caballetes',['Caballetes']],['Pava eléctrica',['Pava eléctrica']],
+    ['Alargue',['Alargue']],['Zapatilla eléctrica',['Zapatilla eléctrica']],['Bidones de agua',['Bidones de agua']],
+    ['Dispenser',['Dispenser']],['Té',['Té']],['Mate cocido',['Mate cocido']],['Café',['Café']],['Azúcar',['Azúcar']],
+    ['Removedores',['Removedores','Removedor']],['Edulcorante',['Edulcorante']],['Vasos térmicos',['Vasos térmicos']],
+    ['Vasos telgopor',['Vasos telgopor']],['Vasos plásticos',['Vasos plásticos']],['Precintos',['Precintos']],
+    ['Alambre',['Alambre']],['Herramientas',['Herramientas']],['Moledora',['Moledora']],['Agujereadora',['Agujereadora']],
+    ['Hidrolavadora',['Hidrolavadora']],['Aspiradora',['Aspiradora']]
+  ];
   const esc=s=>String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const limpiar=s=>String(s||'').replace(/\s+/g,' ').trim();
 
@@ -13,14 +22,15 @@
 
   function extraerElementos(t){
     const encontrados=[];
-    for(const nombre of items){
-      const p=nombre.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      const re=new RegExp(`${p}\\s*[:x-]?\\s*(\\d+)`,'i');
-      const m=t.match(re);
-      if(m && Number(m[1])>0){
-        const etiqueta=nombre.toLowerCase();
-        if(!encontrados.some(x=>x.toLowerCase().includes(etiqueta))) encontrados.push(`${m[1]} ${nombre.toLowerCase()}`);
+    for(const [etiqueta,variantes] of items){
+      let cantidad=null;
+      for(const nombre of variantes){
+        const p=nombre.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        const re=new RegExp(`${p}\\s*[:x-]?\\s*(\\d+)`,'i');
+        const m=t.match(re);
+        if(m && Number(m[1])>0){cantidad=Number(m[1]);break;}
       }
+      if(cantidad!==null) encontrados.push({nombre:etiqueta,cantidad});
     }
     return encontrados;
   }
@@ -40,19 +50,26 @@
     const elems=extraerElementos(t);
     const desc=extraerDescripcion(t);
     if(!elems.length && !desc) return '';
-    let h='<ul class="agenda-pedido-list">';
-    if(elems.length) h+=`<li><strong>Pedido:</strong> ${esc(elems.join(' · '))}</li>`;
-    if(desc) h+=`<li><strong>Detalle:</strong> ${esc(desc)}</li>`;
-    return h+'</ul>';
+    let h='';
+    if(elems.length){
+      h+='<div class="agenda-pedido"><div class="agenda-pedido-titulo">Pedido</div><ul class="agenda-pedido-list">';
+      h+=elems.map(x=>`<li><span>${esc(x.nombre)}:</span><strong>${x.cantidad}</strong></li>`).join('');
+      h+='</ul></div>';
+    }
+    if(desc) h+=`<div class="agenda-pedido-detalle"><strong>Detalle:</strong> ${esc(desc)}</div>`;
+    return h;
   }
 
   function estilo(){
     if(document.getElementById('agendaListaStyle'))return;
     const s=document.createElement('style');s.id='agendaListaStyle';s.textContent=`
-      .agenda-pedido-list{margin:7px 0 4px;padding:0;list-style:none;display:grid;gap:4px;font-size:14px;line-height:1.35}
-      .agenda-pedido-list li{position:relative;padding-left:15px;color:#263445}
-      .agenda-pedido-list li:before{content:'•';position:absolute;left:2px;font-weight:800}
-      .agenda-pedido-list strong{color:#102033}
+      .agenda-pedido{margin:9px 0 6px;border-left:3px solid #dce3ea;padding-left:10px}
+      .agenda-pedido-titulo{font-size:13px;font-weight:800;color:#687383;text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px}
+      .agenda-pedido-list{margin:0;padding:0;list-style:none;display:grid;gap:3px;font-size:14px;line-height:1.35;max-width:320px}
+      .agenda-pedido-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:baseline;color:#263445;padding:1px 0}
+      .agenda-pedido-list li span{font-weight:600}.agenda-pedido-list li strong{color:#102033;font-size:15px;text-align:right}
+      .agenda-pedido-detalle{margin:6px 0 4px;font-size:14px;line-height:1.35;color:#263445}
+      .agenda-pedido-detalle strong{color:#102033}
       .agenda-item{padding-top:13px!important;padding-bottom:13px!important}
     `;document.head.appendChild(s);
   }
@@ -61,13 +78,14 @@
     estilo();
     document.querySelectorAll('.agenda-item').forEach(i=>{
       i.querySelector('.agenda-detalle')?.remove();
-      if(i.querySelector('.agenda-pedido-list'))return;
+      i.querySelector('.agenda-pedido')?.remove();
+      i.querySelector('.agenda-pedido-detalle')?.remove();
       const c=((i.querySelector('.agenda-code')?.textContent||'').split('·')[0]||'').trim();
       const t=datos[c]; if(!t)return;
       const html=crearLista(t); if(!html)return;
       const wrap=document.createElement('div');wrap.innerHTML=html;
-      const lista=wrap.firstElementChild;
-      i.querySelector('.agenda-meta')?.before(lista);
+      const meta=i.querySelector('.agenda-meta');
+      [...wrap.children].forEach(el=>meta?meta.before(el):i.appendChild(el));
     });
   }
 
